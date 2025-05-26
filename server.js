@@ -7,6 +7,8 @@ const fs = require("fs");
 const app = express();
 const PORT = 5151;
 
+const PUBLIC_URL = "https://secureshareserver-production.up.railway.app";
+
 // Ensure uploads directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -46,7 +48,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
         return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const fileUrl = `http://${req.hostname}:${PORT}/uploads/${req.file.filename}`;
+    const fileUrl = `${PUBLIC_URL}/uploads/${req.file.filename}`;
     res.json({
         message: "File uploaded successfully",
         filename: req.file.filename,
