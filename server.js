@@ -5,7 +5,8 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
-const PORT = process.env.PORT || 5151;
+const PORT = 5151;
+
 const PUBLIC_URL = "https://secureshareserver-production.up.railway.app";
 
 const uploadDir = path.join(__dirname, "uploads");
@@ -14,11 +15,9 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 app.use("/uploads", express.static(uploadDir, {
-    setHeaders: (res, filePath) => {
+    setHeaders: (res, path) => {
         res.setHeader("Content-Disposition", "attachment");
         res.setHeader("Content-Type", "application/octet-stream");
     }
