@@ -24,6 +24,43 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
+const WebSocket = require("ws");
+const wss = new WebSocket.Server({ server });
+
+app.use(cors());
+app.use(express.json());
+
+wss.on('connection', socket => {
+    let peerId = null;
+
+    socket.on('message', message => {
+        try {
+            const data = JSON.parse(message);
+            if (data.type === 'register') {
+                peerId = data.peerId;
+                peers.set(peerId, socket);
+                console.log(`Peer registered: ${peerId}`);
+            } else if (data.type === 'signal') {
+                const { to, payload } = data;
+                const targetSocket = peers.get(to);
+                if (targetSocket) {
+                    targetSocket.send(JSON.stringify({
+                        type: 'signal',
+                        from: peerId,
+                        payload
+                    }));
+                }
+            }
+        } catch (e) {
+            console.error("Failed to process WebSocket message", e);
+        }
+    });
+
+    socket.on('close', () => {
+        if (peerId) peers.delete(peerId);
+    });
+});
+
 // Static file serving
 app.use("/uploads", express.static(uploadDir, {
     setHeaders: (res, path) => {
