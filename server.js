@@ -59,6 +59,19 @@ wss.on('connection', socket => {
     socket.on('close', () => {
         if (peerId) peers.delete(peerId);
     });
+
+    socket.on("ice-candidate", ({ to, candidate }) => {
+        const targetSocket = connectedPeers[to];
+        if (targetSocket) {
+            targetSocket.emit("ice-candidate", {
+                from: socket.peerId,
+                candidate,
+            });
+            console.log(`➡️  Relayed ICE candidate from ${socket.peerId} to ${to}`);
+        } else {
+            console.log(`❌ Target ${to} not found for ICE candidate`);
+        }
+    });
 });
 
 // Static file serving
