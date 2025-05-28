@@ -9,6 +9,8 @@ const PUBLIC_URL = "https://secureshareserver-production.up.railway.app";
 const http = require("http");
 const {v4: uuidv4} = require("uuid");
 const server = http.createServer(app);
+const peers = new Map();
+const connectedPeers = {};
 
 app.use(cors());
 app.use(express.json());
@@ -67,9 +69,9 @@ wss.on('connection', socket => {
                 from: socket.peerId,
                 candidate,
             });
-            console.log(`➡️  Relayed ICE candidate from ${socket.peerId} to ${to}`);
+            console.log(`Relayed ICE candidate from ${socket.peerId} to ${to}`);
         } else {
-            console.log(`❌ Target ${to} not found for ICE candidate`);
+            console.log(`Target ${to} not found for ICE candidate`);
         }
     });
 });
