@@ -3,10 +3,17 @@ const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
-
 const app = express();
 const PORT = 5151;
 const PUBLIC_URL = "https://secureshareserver-production.up.railway.app";
+const http = require("http");
+const {v4: uuidv4} = require("uuid");
+const server = http.createServer(app);
+
+app.use(cors());
+app.use(express.json());
+
+const sessions = new Map(); // PIN -> { peerId, offer, answer, candidates: [] }
 
 // In-memory PIN → deviceId store
 const pinToDeviceMap = {};
@@ -16,10 +23,6 @@ const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
-
-// Middleware
-app.use(cors());
-app.use(express.json());
 
 // Static file serving
 app.use("/uploads", express.static(uploadDir, {
@@ -37,7 +40,7 @@ const storage = multer.diskStorage({
         cb(null, uniqueName);
     }
 });
-const upload = multer({ storage });
+const upload = multer({storage});
 
 // Log all requests
 app.use((req, res, next) => {
@@ -47,16 +50,16 @@ app.use((req, res, next) => {
 
 // Upload endpoint
 app.post("/upload", upload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.file) return res.status(400).json({error: "No file uploaded"});
 
     const fileUrl = `${PUBLIC_URL}/uploads/${req.file.filename}`;
-    res.json({ message: "File uploaded successfully", filename: req.file.filename, url: fileUrl });
+    res.json({message: "File uploaded successfully", filename: req.file.filename, url: fileUrl});
 });
 
 // Files list
 app.get("/files", (req, res) => {
     fs.readdir(uploadDir, (err, files) => {
-        if (err) return res.status(500).json({ error: "Unable to list files" });
+        if (err) return res.status(500).json({error: "Unable to list files"});
 
         const fileInfos = files.map(name => ({
             name,
@@ -68,38 +71,102 @@ app.get("/files", (req, res) => {
 
 // Device registration
 app.post("/register", (req, res) => {
-    const { deviceId } = req.body;
-    if (!deviceId) return res.status(400).json({ error: "Missing deviceId" });
+    const {deviceId} = req.body;
+    if (!deviceId) return res.status(400).json({error: "Missing deviceId"});
 
     console.log("✅ Registered device:", deviceId);
-    res.json({ message: "Registered successfully", deviceId });
+    res.json({message: "Registered successfully", deviceId});
 });
 
-// Generate PIN
+function generatePIN() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// === API Endpoints ===
+
+// 1. Generate PIN
 app.post("/generate-pin", (req, res) => {
-    const { deviceId } = req.body;
-    if (!deviceId) return res.status(400).json({ error: "Missing deviceId" });
-
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
-    pinToDeviceMap[pin] = deviceId;
-
-    console.log("📌 Generated PIN:", pin, "for device:", deviceId);
-    res.json({ pin });
+    const pin = generatePIN();
+    const peerId = uuidv4();
+    sessions.set(pin, {peerId, candidates: []});
+    res.json({pin, peerId});
 });
 
-// Lookup PIN
+// 2. Lookup PIN
 app.post("/lookup-pin", (req, res) => {
-    const { pin } = req.body;
-    if (!pin) return res.status(400).json({ error: "Missing pin" });
-
-    const deviceId = pinToDeviceMap[pin];
-    if (!deviceId) return res.status(404).json({ error: "PIN not found or expired" });
-
-    console.log("🔍 Resolved PIN:", pin, "to device:", deviceId);
-    res.json({ deviceId });
+    const {pin} = req.body;
+    const session = sessions.get(pin);
+    if (session) {
+        res.json({peerId: session.peerId});
+    } else {
+        res.status(404).json({error: "PIN not found"});
+    }
 });
 
-// Start server
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
+// 3. Save Offer
+app.post("/offer", (req, res) => {
+    const {pin, offer} = req.body;
+    const session = sessions.get(pin);
+    if (session) {
+        session.offer = offer;
+        res.json({success: true});
+    } else {
+        res.status(404).json({error: "PIN not found"});
+    }
+});
+
+// 4. Save Answer
+app.post("/answer", (req, res) => {
+    const {pin, answer} = req.body;
+    const session = sessions.get(pin);
+    if (session) {
+        session.answer = answer;
+        res.json({success: true});
+    } else {
+        res.status(404).json({error: "PIN not found"});
+    }
+});
+
+// 5. Exchange ICE candidates
+app.post("/candidate", (req, res) => {
+    const {pin, candidate} = req.body;
+    const session = sessions.get(pin);
+    if (session) {
+        session.candidates.push(candidate);
+        res.json({success: true});
+    } else {
+        res.status(404).json({error: "PIN not found"});
+    }
+});
+
+app.get("/candidates/:pin", (req, res) => {
+    const pin = req.params.pin;
+    const session = sessions.get(pin);
+    if (session) {
+        res.json({candidates: session.candidates});
+    } else {
+        res.status(404).json({error: "PIN not found"});
+    }
+});
+
+app.get("/offer/:pin", (req, res) => {
+    const session = sessions.get(req.params.pin);
+    if (session?.offer) {
+        res.json({offer: session.offer});
+    } else {
+        res.status(404).json({error: "Offer not found"});
+    }
+});
+
+app.get("/answer/:pin", (req, res) => {
+    const session = sessions.get(req.params.pin);
+    if (session?.answer) {
+        res.json({answer: session.answer});
+    } else {
+        res.status(404).json({error: "Answer not found"});
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`🚀 Signaling server running at http://localhost:${PORT}`);
 });
