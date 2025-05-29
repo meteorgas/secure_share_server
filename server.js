@@ -233,7 +233,16 @@ const WebSocket = require("ws");
 
 const app = express();
 app.use(cors());
-// app.use(express.json());
+app.use(express.json());
+
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] → ${req.method} ${req.originalUrl}`);
+    next();
+});
+
+app.get("/", (req, res) => {
+    res.send("🚀 Signaling server alive!");
+});
 
 const PORT = process.env.PORT || 5151;
 const server = http.createServer(app);
@@ -328,6 +337,6 @@ wss.on("connection", (ws) => {
 });
 
 // Start server
-server.listen(PORT, () => {
-    console.log(`Signaling server listening on port ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Signaling server listening on 0.0.0.0:${PORT}`);
 });
