@@ -244,6 +244,8 @@ app.get("/", (req, res) => {
     res.send("🚀 Signaling server alive!");
 });
 
+app.get("/healthz", (req, res) => res.send("OK"));
+
 const PORT = process.env.PORT || 5151;
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
